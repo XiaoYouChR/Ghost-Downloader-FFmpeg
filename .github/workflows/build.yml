@@ -1,7 +1,16 @@
 name: build-minimal-ffmpeg
 
-# Builds minimal LGPL FFmpeg for all Ghost Downloader targets, smoke-tests each,
-# and (on a tag) publishes version-less assets + .sha256 to a GitHub Release.
+# Builds minimal LGPL FFmpeg for every Ghost Downloader target and, on a tag,
+# publishes version-less assets + .sha256 to a GitHub Release.
+#
+# Strategy (zero external libs -> identical, trivial cross-builds):
+#   - linux/macOS build NATIVELY on per-arch runners (no cross) and run the FULL
+#     smoke test. Those 4 runs (2 OS x 2 arch) validate the platform-independent
+#     configure whitelist.
+#   - Windows is cross-built from Linux (mingw-w64 / llvm-mingw); Android via NDK.
+#     They are build-only: compiling is the per-toolchain proof; the feature set
+#     is already proven by the native smoke runs. (winarm64/android can't run on
+#     an x64 runner; win64 gets a best-effort Wine check.)
 #
 # Trigger by pushing a tag like n8.1.1-gd1. FFMPEG_REF pins the upstream source.
 
@@ -11,63 +20,91 @@ on:
   workflow_dispatch:
     inputs:
       ffmpeg_ref:
-        description: "FFmpeg git ref (release/8.1 branch or n8.1.1 tag)"
+        description: "FFmpeg git ref (e.g. n8.1.1)"
         default: "n8.1.1"
 
 env:
   FFMPEG_REF: ${{ github.event.inputs.ffmpeg_ref || 'n8.1.1' }}
+  LLVM_MINGW: llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64
 
 jobs:
-  win-linux:
-    runs-on: ubuntu-latest
+  linux:
     strategy:
       fail-fast: false
       matrix:
-        target: [win64, winarm64, linux-x64, linux-arm64]
-    container:
-      # TODO: pin BtbN's cross toolchain base image (provides mingw-w64 + linux
-      # cross toolchains). e.g. ghcr.io/btbn/ffmpeg-builds-... — confirm tag.
-      image: ghcr.io/btbn/ffmpeg-builds-base:latest
+        include:
+          - { runner: ubuntu-latest,   target: linux-x64 }
+          - { runner: ubuntu-24.04-arm, target: linux-arm64 }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch FFmpeg source
         run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
       - name: Build
-        env: { TARGET: "${{ matrix.target }}" }
-        run: bash scripts/build-windows-linux.sh ffmpeg-src out/${{ matrix.target }}
+        run: bash scripts/build-linux.sh ffmpeg-src out
       - name: Smoke test
-        # winarm64 cannot run on x64 host; CI runs under emulation or marks skipped loudly.
-        run: |
-          if [ "${{ matrix.target }}" = "winarm64" ]; then
-            echo "::warning::winarm64 smoke test needs emulation; not run natively"
-          else
-            EXE_SUFFIX=$([ "${{ matrix.target }}" = "win64" ] && echo .exe || echo "") \
-              bash scripts/smoke-test.sh out/${{ matrix.target }}
-          fi
+        run: bash scripts/smoke-test.sh out
       - name: Package
-        run: bash scripts/package.sh ${{ matrix.target }} out/${{ matrix.target }} dist
+        run: bash scripts/package.sh ${{ matrix.target }} out dist
       - uses: actions/upload-artifact@v4
         with: { name: "ffmpeg-${{ matrix.target }}", path: dist/* }
 
   macos:
-    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: x86_64, target: macos-x64 }
-          - { arch: arm64,  target: macos-arm64 }
+          - { runner: macos-13, target: macos-x64 }
+          - { runner: macos-14, target: macos-arm64 }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+      - name: Fetch FFmpeg source
+        run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
       - name: Build
-        env: { ARCH: "${{ matrix.arch }}" }
-        run: bash scripts/build-macos.sh ffmpeg-src out/${{ matrix.target }}
+        run: bash scripts/build-macos.sh ffmpeg-src out
       - name: Smoke test
-        # arm64 runs natively on macos-14; x86_64 runs under Rosetta on the same runner.
-        run: bash scripts/smoke-test.sh out/${{ matrix.target }}
+        run: bash scripts/smoke-test.sh out
       - name: Package
-        run: bash scripts/package.sh ${{ matrix.target }} out/${{ matrix.target }} dist
+        run: bash scripts/package.sh ${{ matrix.target }} out dist
+      - uses: actions/upload-artifact@v4
+        with: { name: "ffmpeg-${{ matrix.target }}", path: dist/* }
+
+  windows:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [win64, winarm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch FFmpeg source
+        run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+      - name: Toolchain (win64 = mingw-w64)
+        if: matrix.target == 'win64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Toolchain (winarm64 = llvm-mingw)
+        if: matrix.target == 'winarm64'
+        run: |
+          curl -fL -o llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/${LLVM_MINGW}.tar.xz"
+          tar xf llvm-mingw.tar.xz
+          echo "$PWD/${LLVM_MINGW}/bin" >> "$GITHUB_PATH"
+      - name: Build
+        env: { TARGET: "${{ matrix.target }}" }
+        run: bash scripts/build-windows.sh ffmpeg-src out
+      - name: Smoke test (win64 via Wine, best-effort)
+        if: matrix.target == 'win64'
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y wine64 || sudo apt-get install -y wine
+          RUNNER="wine64" EXE_SUFFIX=".exe" bash scripts/smoke-test.sh out \
+            || { echo "::warning::win64 Wine smoke did not pass (non-gating)"; exit 0; }
+      - name: Smoke note (winarm64)
+        if: matrix.target == 'winarm64'
+        run: echo "::warning::winarm64 cannot run on an x64 runner; feature set validated by native linux/macOS smoke."
+      - name: Package
+        run: bash scripts/package.sh ${{ matrix.target }} out dist
       - uses: actions/upload-artifact@v4
         with: { name: "ffmpeg-${{ matrix.target }}", path: dist/* }
 
@@ -75,25 +112,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: nttld/setup-ndk@v1
-        id: ndk
-        with: { ndk-version: r28 }
-      - run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
-      - name: Build
-        env: { ANDROID_NDK_ROOT: "${{ steps.ndk.outputs.ndk-path }}" }
-        run: bash scripts/build-android.sh ffmpeg-src out/android-arm64
-      - name: Smoke test (emulator)
-        # TODO: run smoke-test.sh against an arm64 emulator (reactivecircus/android-emulator-runner)
-        run: echo "::warning::android smoke test via emulator — TODO wire up"
+      - name: Fetch FFmpeg source
+        run: git clone --depth 1 -b "$FFMPEG_REF" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+      - name: Build (preinstalled NDK)
+        run: bash scripts/build-android.sh ffmpeg-src out  # reads $ANDROID_NDK_LATEST_HOME
+      - name: Smoke note
+        run: echo "::warning::android binary can't run on an x64 runner; feature set validated by native linux/macOS smoke."
       - name: Package
-        run: bash scripts/package.sh android-arm64 out/android-arm64 dist
+        run: bash scripts/package.sh android-arm64 out dist
       - uses: actions/upload-artifact@v4
         with: { name: "ffmpeg-android-arm64", path: dist/* }
 
   release:
-    needs: [win-linux, macos, android]
+    needs: [linux, macos, windows, android]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }

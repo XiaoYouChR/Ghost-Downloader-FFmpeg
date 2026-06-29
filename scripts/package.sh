@@ -35,8 +35,11 @@ else
   tar -C "$STAGE" -czf "$OUT_DIR/$ASSET" "ffmpeg${SUFFIX}" "ffprobe${SUFFIX}"
 fi
 
-# sha256 sidecar (the app verifies this after download).
-( cd "$OUT_DIR" && sha256sum "$ASSET" > "$ASSET.sha256" )
+# sha256 sidecar (the app verifies this after download). sha256sum on Linux,
+# shasum -a 256 on macOS — both emit "<hash>  <file>", which ChecksumStep parses.
+( cd "$OUT_DIR"
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$ASSET" > "$ASSET.sha256"
+  else shasum -a 256 "$ASSET" > "$ASSET.sha256"; fi )
 
 echo "packaged: $OUT_DIR/$ASSET"
 ls -la "$OUT_DIR/$ASSET" "$OUT_DIR/$ASSET.sha256"

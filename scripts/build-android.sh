@@ -1,49 +1,38 @@
 #!/usr/bin/env bash
-# Android arm64 build via the NDK. Replaces the hzw1199 prebuilt with our minimal set.
-# Targets minSdk 28, NDK r28 (match Ghost Downloader's android/Dockerfile).
-# No MediaCodec / HW decoders: the app only -c copy, never decodes on device.
+# Android arm64 build via the NDK (replaces the hzw1199 prebuilt). Cross-compiled
+# from a Linux runner. minSdk 21 (runs on 21+, incl. the app's 28). The unified
+# NDK clang wrapper sets target+sysroot; binutils come from the llvm- cross-prefix.
+# Executables are PIE (Android requirement) and link bionic dynamically (present
+# on device) — NOT fully static. android/Dockerfile renames them to libffmpeg.so /
+# libffprobe.so when packing the APK.
 #
 # Usage: build-android.sh <ffmpeg-src-dir> <out-bin-dir>
-# Env:   ANDROID_NDK_ROOT, API=28 (default), ABI=arm64-v8a (default)
+# Env:   ANDROID_NDK_ROOT (or ANDROID_NDK_LATEST_HOME), API=21 (default)
 
 set -euo pipefail
 SRC="${1:?ffmpeg-src-dir}"; OUT="${2:?out-bin-dir}"
 source "$(dirname "$0")/configure-flags.sh"
 
-: "${ANDROID_NDK_ROOT:?set ANDROID_NDK_ROOT}"
-API="${API:-28}"
-HOST_TAG="linux-x86_64"
-TOOLCHAIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_TAG"
-CROSS_PREFIX="$TOOLCHAIN/bin/llvm-"
+NDK="${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}"
+[ -n "$NDK" ] || { echo "set ANDROID_NDK_ROOT" >&2; exit 1; }
+API="${API:-21}"
+TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 CC="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang"
+[ -x "$CC" ] || { echo "NDK clang not found: $CC" >&2; exit 1; }
 
 mkdir -p "$OUT"
-pushd "$SRC" >/dev/null
+cd "$SRC"
 
-./configure \
-  "${FFMPEG_CONFIGURE_FLAGS[@]}" \
-  --prefix="$PWD/_android_install" \
-  --target-os=android \
-  --arch=aarch64 \
-  --cpu=armv8-a \
-  --enable-cross-compile \
-  --cc="$CC" \
-  --cxx="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang++" \
-  --ar="${CROSS_PREFIX}ar" \
-  --ranlib="${CROSS_PREFIX}ranlib" \
-  --strip="${CROSS_PREFIX}strip" \
-  --nm="${CROSS_PREFIX}nm" \
-  --sysroot="$TOOLCHAIN/sysroot" \
-  --enable-pic \
-  --disable-shared --enable-static \
-  --extra-cflags="-Os -fPIC -DANDROID" \
-  --extra-ldflags="-fPIE -pie"
+./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \
+  --target-os=android --arch=aarch64 --cpu=armv8-a --enable-cross-compile \
+  --cc="$CC" --cross-prefix="$TOOLCHAIN/bin/llvm-" \
+  --disable-shared --enable-static --enable-pic \
+  --extra-cflags="-Os -fPIE" \
+  --extra-ldflags="-pie"
 
 make -j"$(nproc)"
-"${CROSS_PREFIX}strip" ffmpeg ffprobe || true
+"$TOOLCHAIN/bin/llvm-strip" ffmpeg ffprobe 2>/dev/null || true
 cp ffmpeg ffprobe "$OUT/"
-popd >/dev/null
-
-# NOTE: android/Dockerfile renames these to libffmpeg.so / libffprobe.so when it
-# packs them into the APK; we ship plain ffmpeg/ffprobe in the tar.gz.
-echo "android arm64 built -> $OUT"
+echo "android arm64 (API $API) built -> $OUT"
+file ffmpeg 2>/dev/null || true
+ls -la "$OUT"

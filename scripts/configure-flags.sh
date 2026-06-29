@@ -30,7 +30,11 @@ BASE_FLAGS=(
   --disable-doc
   --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages
   --disable-avdevice
-  --disable-postproc
+  # Zero external libraries — guarantees identical, trivial cross-builds on every
+  # target (no zlib/openssl/x264/... to provision per toolchain). The crypto
+  # protocol / HLS AES-128 use libavutil's built-in AES, so no openssl is needed.
+  --disable-autodetect
+  --disable-x86asm
   # NOTE (riskiest flag): network is OFF. In this app, segments are pre-downloaded
   # by N_m3u8DL-RE / yt-dlp and ffmpeg only ever touches local files + pipes, so
   # dropping TLS/HTTP saves a lot of size. If a future path feeds ffmpeg an http(s)
@@ -70,11 +74,12 @@ DEMUXER_FLAGS=(
   --enable-demuxer=hevc
   --enable-demuxer=concat
   --enable-demuxer=ffmetadata     # --embed-metadata / --embed-chapters readback
-  # thumbnail sources
+  # thumbnail sources (image2 = file by ext; image_*_pipe = probe by content)
   --enable-demuxer=image2
   --enable-demuxer=image2pipe
-  --enable-demuxer=png_pipe
-  --enable-demuxer=webp_pipe
+  --enable-demuxer=image_png_pipe
+  --enable-demuxer=image_webp_pipe
+  --enable-demuxer=image_jpeg_pipe
   --enable-demuxer=mjpeg
   # subtitle inputs (sidecar today; cheap headroom for future embed-subs)
   --enable-demuxer=srt
@@ -97,18 +102,19 @@ MUXER_FLAGS=(
   --enable-muxer=data
 )
 
-# --- decoders: ONLY for webp->mp4 thumbnail conversion (stream copy needs none) ---
+# --- decoders: ONLY for thumbnail conversion (stream copy needs none) ---
+# png/zlib is deliberately excluded to keep the build dependency-free; the app
+# passes yt-dlp `--convert-thumbnails jpg`, so source thumbnails (webp/jpg) decode
+# here and re-encode as mjpeg. webp lossy = VP8 intra, so vp8 is required.
 DECODER_FLAGS=(
   --enable-decoder=webp
-  --enable-decoder=vp8           # lossy webp = VP8 intra
-  --enable-decoder=png
+  --enable-decoder=vp8
   --enable-decoder=mjpeg
 )
 
-# --- encoders: ONLY mjpeg/png for mp4 thumbnail conversion ---
+# --- encoders: ONLY mjpeg (jpg) for the thumbnail conversion target ---
 ENCODER_FLAGS=(
   --enable-encoder=mjpeg
-  --enable-encoder=png
 )
 
 # --- parsers: keep copy/probe from failing to read codec parameters (cheap) ---
@@ -126,7 +132,6 @@ PARSER_FLAGS=(
   --enable-parser=vp9
   --enable-parser=av1
   --enable-parser=mjpeg
-  --enable-parser=png
   --enable-parser=webp
 )
 
