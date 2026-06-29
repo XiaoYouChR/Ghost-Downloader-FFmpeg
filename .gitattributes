@@ -1,0 +1,4 @@
+# This repo's scripts run on Linux/macOS CI — force LF so bash never sees CRLF.
+* text=auto eol=lf
+*.sh text eol=lf
+*.yml text eol=lf

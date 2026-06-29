@@ -1,0 +1,12 @@
+# build inputs/outputs — produced by CI, never committed
+ffmpeg-src/
+out/
+dist/
+*.zip
+*.tar.gz
+*.sha256
+
+# local cruft
+.DS_Store
+Thumbs.db
+*.log
