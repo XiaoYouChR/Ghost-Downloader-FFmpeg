@@ -20,11 +20,11 @@ on:
   workflow_dispatch:
     inputs:
       ffmpeg_ref:
-        description: "FFmpeg git ref (e.g. n8.1.1)"
-        default: "n8.1.1"
+        description: "FFmpeg git ref (e.g. n8.1.2)"
+        default: "n8.1.2"
 
 env:
-  FFMPEG_REF: ${{ github.event.inputs.ffmpeg_ref || 'n8.1.1' }}
+  FFMPEG_REF: ${{ github.event.inputs.ffmpeg_ref || 'n8.1.2' }}
   LLVM_MINGW: llvm-mingw-20260616-ucrt-ubuntu-22.04-x86_64
 
 jobs:

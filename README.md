@@ -40,8 +40,8 @@ tests/fixtures/                 # tiny media exercising every app code path
 
 ## Versioning
 
-Pin upstream FFmpeg stable (`n8.1.1`, matching the app's Android baseline). Tag
-this repo `n8.1.1-gd1`, `n8.1.1-gd2`, … The app fetches **this repo's**
+Pin upstream FFmpeg stable (`n8.1.2`, the latest 8.1.x). Tag
+this repo `n8.1.2-gd1`, `n8.1.2-gd2`, … The app fetches **this repo's**
 `/releases/latest`, so an FFmpeg security bump ships without an app update.
 
 ## Status — skeleton

@@ -2,7 +2,7 @@
 # Package built binaries into a release asset + .sha256 sidecar.
 #
 # Asset names are VERSION-LESS and deterministic, so the app picks by exact name
-# without reading the release tag. The release TAG (n8.1.1-gd1...) carries the
+# without reading the release tag. The release TAG (n8.1.2-gd1...) carries the
 # version/provenance.
 #
 # Usage: package.sh <platform-arch> <bin-dir> <out-dir>
