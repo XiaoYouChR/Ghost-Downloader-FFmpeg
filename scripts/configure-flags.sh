@@ -158,6 +158,17 @@ BSF_FLAGS=(
   --enable-bsf=extract_extradata
 )
 
+# --- filters: ONLY pixel-format conversion for thumbnail encode (webp->mjpeg).
+# yt-dlp's --convert-thumbnails jpg decodes webp then encodes mjpeg, which needs
+# a pixfmt convert; without these filters it dies "'scale' filter not present".
+# Remux (-c copy) uses no filters.
+FILTER_FLAGS=(
+  --enable-filter=scale
+  --enable-filter=format
+  --enable-filter=null
+  --enable-filter=copy
+)
+
 FFMPEG_CONFIGURE_FLAGS=(
   "${LICENSE_FLAGS[@]}"
   "${BASE_FLAGS[@]}"
@@ -168,6 +179,7 @@ FFMPEG_CONFIGURE_FLAGS=(
   "${ENCODER_FLAGS[@]}"
   "${PARSER_FLAGS[@]}"
   "${BSF_FLAGS[@]}"
+  "${FILTER_FLAGS[@]}"
 )
 
 export FFMPEG_CONFIGURE_FLAGS
