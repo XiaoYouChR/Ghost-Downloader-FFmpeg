@@ -2,3 +2,12 @@
 * text=auto eol=lf
 *.sh text eol=lf
 *.yml text eol=lf
+
+# Smoke-test fixtures are binary — never normalize (key.bin especially: CRLF
+# mangling would change the AES key and break decryption in CI).
+*.mp4 binary
+*.m4a binary
+*.mkv binary
+*.ts binary
+*.webp binary
+*.bin binary

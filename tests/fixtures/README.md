@@ -17,14 +17,19 @@ Required files (referenced by `scripts/smoke-test.sh`):
 | `thumb.webp` | webp → mp4 cover (webp/vp8 decoder + png encoder) |
 | `meta.ffmeta` | `--embed-metadata` / `--embed-chapters` (ffmetadata demuxer) |
 
-## How to generate (once, with a full ffmpeg, then commit the outputs)
+## How to regenerate
+
+Run the generator with a full ffmpeg (needs libx264, aac, eac3, libwebp):
 
 ```bash
-# from a sine + testsrc, kept ~0.5s so files stay tiny
-ffmpeg -f lavfi -i testsrc=d=0.5:s=128x96 -c:v libx264 -an video.h264.mp4
-ffmpeg -f lavfi -i sine=d=0.5 -c:a aac audio.aac.m4a
-ffmpeg -i video.h264.mp4 -i audio.aac.m4a -c copy -f mpegts segment.ts
-# ... see commit history for the exact commands used to produce each fixture.
+bash scripts/make-fixtures.sh            # fully synthetic (testsrc2 + sine)
+bash scripts/make-fixtures.sh clip.mp4   # use clip.mp4's video stream, synthetic audio
 ```
 
-Keep fixtures minimal; they are test inputs, not sample content.
+Everything is cut to ~0.5s at <=160px, so each file is a few KB. Audio is
+always a synthetic sine (so no real audio source is needed).
+
+Provenance: the committed fixtures' video frames come from a short, low-res
+(160px / 0.5s) snippet of a user-provided clip; audio is synthetic. Swap to the
+fully synthetic form above if you prefer no real frames. They are test inputs,
+not sample content.
