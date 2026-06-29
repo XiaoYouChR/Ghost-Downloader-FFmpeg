@@ -20,7 +20,7 @@ TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
 CC="$TOOLCHAIN/bin/aarch64-linux-android${API}-clang"
 [ -x "$CC" ] || { echo "NDK clang not found: $CC" >&2; exit 1; }
 
-mkdir -p "$OUT"
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"   # absolute: we cd into $SRC below
 cd "$SRC"
 
 ./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \

@@ -17,6 +17,8 @@ TARGET="${1:?usage: package.sh <platform-arch> <bin-dir> <out-dir>}"
 BIN_DIR="${2:?bin-dir}"
 OUT_DIR="${3:?out-dir}"
 mkdir -p "$OUT_DIR"
+# absolute: the zip path cd's into the staging dir, so a relative OUT_DIR would break.
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
 case "$TARGET" in
   win64|winarm64) EXT="zip"; SUFFIX=".exe" ;;

@@ -11,7 +11,7 @@ SRC="${1:?ffmpeg-src-dir}"; OUT="${2:?out-bin-dir}"
 source "$(dirname "$0")/configure-flags.sh"
 
 MIN="-mmacosx-version-min=11.0"
-mkdir -p "$OUT"
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"   # absolute: we cd into $SRC below
 cd "$SRC"
 
 ./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \

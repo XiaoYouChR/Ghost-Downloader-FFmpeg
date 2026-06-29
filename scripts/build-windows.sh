@@ -19,7 +19,7 @@ case "$TARGET" in
   *) echo "unknown TARGET: $TARGET" >&2; exit 1 ;;
 esac
 
-mkdir -p "$OUT"
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"   # absolute: we cd into $SRC below
 cd "$SRC"
 
 ./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \
