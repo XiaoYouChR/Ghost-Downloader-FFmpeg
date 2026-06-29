@@ -50,15 +50,15 @@ jobs:
         with: { name: "ffmpeg-${{ matrix.target }}", path: dist/* }
 
   macos:
-    # Both arches build on macos-14 (arm64); Intel runners (macos-13) are scarce
-    # and queue for a long time. x86_64 is a clang -arch cross-build.
-    runs-on: macos-14
+    # Native per-arch runners (matches Ghost-Downloader-3): arm64 on macos-14,
+    # Intel on macos-15-intel (the supported Intel label; macos-13 queues forever).
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: arm64,  target: macos-arm64 }
-          - { arch: x86_64, target: macos-x64 }
+          - { runner: macos-14,       arch: arm64,  target: macos-arm64 }
+          - { runner: macos-15-intel, arch: x86_64, target: macos-x64 }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch FFmpeg source
@@ -66,16 +66,8 @@ jobs:
       - name: Build
         env: { ARCH: "${{ matrix.arch }}" }
         run: bash scripts/build-macos.sh ffmpeg-src out
-      - name: Smoke test (arm64 native)
-        if: matrix.arch == 'arm64'
+      - name: Smoke test
         run: bash scripts/smoke-test.sh out
-      - name: Smoke test (x86_64 via Rosetta, best-effort)
-        if: matrix.arch == 'x86_64'
-        continue-on-error: true
-        run: |
-          softwareupdate --install-rosetta --agree-to-license || true
-          bash scripts/smoke-test.sh out \
-            || { echo "::warning::macos-x64 Rosetta smoke did not pass (non-gating)"; exit 0; }
       - name: Package
         run: bash scripts/package.sh ${{ matrix.target }} out dist
       - uses: actions/upload-artifact@v4
