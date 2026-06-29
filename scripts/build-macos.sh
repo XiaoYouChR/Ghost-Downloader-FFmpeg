@@ -15,12 +15,8 @@ ARCH="${ARCH:-$(uname -m)}"          # arm64 | x86_64
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"   # absolute: we cd into $SRC below
 cd "$SRC"
 
-# Both arches build on a single arm64 runner (macos-14); x86_64 is a clang -arch
-# cross-build (Intel macOS runners are scarce/queued). clang targets both via -arch.
-CROSS=()
-[ "$ARCH" != "$(uname -m)" ] && CROSS=(--enable-cross-compile --arch="$ARCH")
-
-./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" "${CROSS[@]}" \
+# Native per-arch build (-arch matches the runner: arm64 / x86_64); no cross.
+./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \
   --disable-shared --enable-static \
   --extra-cflags="-Os -arch $ARCH $MIN" \
   --extra-ldflags="-arch $ARCH $MIN"
