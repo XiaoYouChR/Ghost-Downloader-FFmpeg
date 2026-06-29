@@ -107,9 +107,22 @@ MUXER_FLAGS=(
 # passes yt-dlp `--convert-thumbnails jpg`, so source thumbnails (webp/jpg) decode
 # here and re-encode as mjpeg. webp lossy = VP8 intra, so vp8 is required.
 DECODER_FLAGS=(
+  # thumbnail decode (webp lossy = VP8 intra)
   --enable-decoder=webp
   --enable-decoder=vp8
   --enable-decoder=mjpeg
+  # audio decoders: required so remux (-c copy) can read codec parameters
+  # (sample rate, channels) from raw/ADTS audio in TS/HLS, where the container
+  # carries no extradata. Without them, mp4/mkv muxing fails "sample rate not
+  # set" — which would break real m3u8 / bilibili / yt-dlp remuxing too.
+  --enable-decoder=aac
+  --enable-decoder=ac3
+  --enable-decoder=eac3
+  --enable-decoder=mp3
+  --enable-decoder=mp3float
+  --enable-decoder=flac
+  --enable-decoder=opus
+  --enable-decoder=vorbis
 )
 
 # --- encoders: ONLY mjpeg (jpg) for the thumbnail conversion target ---

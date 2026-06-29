@@ -11,16 +11,22 @@ SRC="${1:?ffmpeg-src-dir}"; OUT="${2:?out-bin-dir}"
 source "$(dirname "$0")/configure-flags.sh"
 
 MIN="-mmacosx-version-min=11.0"
+ARCH="${ARCH:-$(uname -m)}"          # arm64 | x86_64
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"   # absolute: we cd into $SRC below
 cd "$SRC"
 
-./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" \
+# Both arches build on a single arm64 runner (macos-14); x86_64 is a clang -arch
+# cross-build (Intel macOS runners are scarce/queued). clang targets both via -arch.
+CROSS=()
+[ "$ARCH" != "$(uname -m)" ] && CROSS=(--enable-cross-compile --arch="$ARCH")
+
+./configure "${FFMPEG_CONFIGURE_FLAGS[@]}" "${CROSS[@]}" \
   --disable-shared --enable-static \
-  --extra-cflags="-Os $MIN" \
-  --extra-ldflags="$MIN"
+  --extra-cflags="-Os -arch $ARCH $MIN" \
+  --extra-ldflags="-arch $ARCH $MIN"
 
 make -j"$(sysctl -n hw.ncpu)"
 strip -x ffmpeg ffprobe 2>/dev/null || true
 cp ffmpeg ffprobe "$OUT/"
-echo "macOS ($(uname -m)) built -> $OUT"
+echo "macOS ($ARCH) built -> $OUT"
 ls -la "$OUT"
